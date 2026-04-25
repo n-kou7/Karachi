@@ -36,7 +36,9 @@ const VARIANTS = {
   ]
 };
 const PALE = { triangle:'#FFD5D5', circle:'#C5DAFF', square:'#B2EFDF' };
-const D_SMILE1=215, D_SMILE2=118, D_WRONG=172, D_SNAP=100, ZONE_R=88;
+const D_SMILE1=240, D_SMILE2=130, D_WRONG=190, D_SNAP=110, ZONE_R=115;
+const DRAG_SZ_BASE = 92;   // 中央図形の基本サイズ
+const DRAG_SZ_SMALL = 30;  // 重なった時の最小サイズ
 
 function resize() {
   W = cv.width = window.innerWidth;
@@ -64,13 +66,13 @@ function makeCorner(family) {
   const n=counts[family];
   for (let i=0;i<n;i++) {
     const ang=(i/n)*Math.PI*2+Math.random()*0.8;
-    const r=36+Math.random()*34;
+    const r=52+Math.random()*44;
     const vr=pickVariant(family);
     corners[family].push({
       family,id:vr.id,color:vr.color,
       bx:cx0+Math.cos(ang)*r, by:cy0+Math.sin(ang)*r,
       ph:Math.random()*Math.PI*2, sp:0.48+Math.random()*0.72,
-      sz:20+Math.random()*14, x:0,y:0,rot:0
+      sz:34+Math.random()*20, x:0,y:0,rot:0
     });
   }
 }
@@ -81,7 +83,7 @@ function spawn() {
   const families=['triangle','circle','square'];
   const family=families[Math.floor(Math.random()*3)];
   const vr=pickVariant(family);
-  drag={family,id:vr.id,color:vr.color,x:W/2,y:H/2,sz:58,
+  drag={family,id:vr.id,color:vr.color,x:W/2,y:H/2,sz:DRAG_SZ_BASE,
         mood:0,idle:Math.random()*Math.PI*2,wobY:0,scl:0};
 }
 
@@ -318,14 +320,23 @@ function update() {
   }
   if (drag) {
     drag.scl=Math.min(1,drag.scl+0.07);
+    // コーナーに近づくほど縮む
+    const {x:tx,y:ty}=cPos(drag.family);
+    const distToTarget=dst(drag.x,drag.y,tx,ty);
+    const shrinkStart=D_SMILE1*1.1;
+    const shrinkRatio=Math.max(0,Math.min(1,(distToTarget-D_SNAP)/(shrinkStart-D_SNAP)));
+    drag.sz=DRAG_SZ_SMALL+(DRAG_SZ_BASE-DRAG_SZ_SMALL)*shrinkRatio;
+
     if (!dragging) {
       drag.idle+=0.04; drag.wobY=Math.sin(drag.idle)*5;
       drag.x+=(W/2-drag.x)*0.045; drag.y+=(H/2-drag.y)*0.045;
       updateMood();
       if (!completing) {
-        const {x:tx,y:ty}=cPos(drag.family);
-        if (dst(drag.x,drag.y,tx,ty)<D_SNAP){completing=true;complete();}
+        if (distToTarget<D_SNAP){completing=true;complete();}
       }
+    } else {
+      updateMood();
+      if (!completing && distToTarget<D_SNAP){completing=true;complete();}
     }
   }
   for (let i=bangs.length-1;i>=0;i--) {
@@ -419,7 +430,7 @@ function toC(cx_,cy_){const r=cv.getBoundingClientRect();return{x:(cx_-r.left)*(
 function hitTest(px,py){if(!drag)return false;const dy=dragging?0:drag.wobY;return dst(px,py,drag.x,drag.y+dy)<drag.sz+32;}
 function onStart(px,py,id){if(dragging||!drag)return;if(hitTest(px,py)){dragging=true;touchId=id??null;offX=px-drag.x;offY=py-(drag.y+drag.wobY);}}
 function onMove(px,py){if(!dragging||!drag)return;drag.x=px-offX;drag.y=py-offY;updateMood();}
-function onEnd(){dragging=false;touchId=null;if(drag&&!completing){const{x:tx,y:ty}=cPos(drag.family);if(dst(drag.x,drag.y,tx,ty)<D_SNAP){completing=true;complete();}}}
+function onEnd(){dragging=false;touchId=null;if(drag&&!completing){const{x:tx,y:ty}=cPos(drag.family);if(dst(drag.x,drag.y,tx,ty)<D_SNAP){completing=true;complete();}else{drag.sz=DRAG_SZ_BASE;}}}
 
 cv.addEventListener('touchstart',e=>{e.preventDefault();const t0=e.changedTouches[0];const p=toC(t0.clientX,t0.clientY);onStart(p.x,p.y,t0.identifier);},{passive:false});
 cv.addEventListener('touchmove',e=>{e.preventDefault();for(const t0 of e.changedTouches){if(t0.identifier!==touchId)continue;const p=toC(t0.clientX,t0.clientY);onMove(p.x,p.y);break;}},{passive:false});
